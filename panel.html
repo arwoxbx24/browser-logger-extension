@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            padding: 16px;
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #1e1e1e;
+            color: #ccc;
+            margin: 0;
+        }
+        h2 {
+            margin: 0 0 16px 0;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        .section {
+            background: #2d2d2d;
+            border: 1px solid #3d3d3d;
+            padding: 12px;
+            margin-bottom: 12px;
+            border-radius: 4px;
+        }
+        .section h3 {
+            margin: 0 0 10px 0;
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+        }
+        .form-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .form-group {
+            flex: 1;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 11px;
+            color: #888;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            background: #1e1e1e;
+            border: 1px solid #3d3d3d;
+            color: #ccc;
+            border-radius: 3px;
+            font-size: 13px;
+            box-sizing: border-box;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #555;
+        }
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 8px 12px;
+            border: 1px solid #3d3d3d;
+            background: #2d2d2d;
+            color: #ccc;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .btn:hover {
+            background: #3d3d3d;
+        }
+        .btn-primary {
+            background: #0e639c;
+            border-color: #0e639c;
+            color: #fff;
+        }
+        .btn-primary:hover {
+            background: #1177bb;
+        }
+        .btn-danger {
+            background: #5a1d1d;
+            border-color: #5a1d1d;
+        }
+        .btn-danger:hover {
+            background: #6e2222;
+        }
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #2d2d2d;
+            border: 1px solid #3d3d3d;
+            border-radius: 4px;
+            margin-bottom: 12px;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #f44;
+        }
+        .status-dot.connected { background: #4a4; }
+        .status-text {
+            font-size: 12px;
+            color: #888;
+        }
+        .stats {
+            display: flex;
+            gap: 16px;
+            margin-left: auto;
+            font-size: 11px;
+            color: #888;
+        }
+        .stat-item span { color: #ccc; }
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+        }
+        .toggle-label { font-size: 12px; }
+        .toggle {
+            width: 36px;
+            height: 18px;
+            background: #3d3d3d;
+            border-radius: 9px;
+            position: relative;
+            cursor: pointer;
+        }
+        .toggle.active { background: #0e639c; }
+        .toggle::after {
+            content: '';
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            background: #ccc;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.2s;
+        }
+        .toggle.active::after { transform: translateX(18px); }
+        .status-msg {
+            padding: 8px;
+            border-radius: 3px;
+            margin-top: 8px;
+            font-size: 12px;
+            display: none;
+        }
+        .status-msg.show { display: block; }
+        .status-msg.success { background: #1e3a1e; color: #6a6; }
+        .status-msg.error { background: #3a1e1e; color: #a66; }
+        .preset-btns {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        .preset-btn {
+            padding: 4px 10px;
+            background: transparent;
+            border: 1px solid #3d3d3d;
+            color: #888;
+            border-radius: 3px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .preset-btn:hover { border-color: #555; color: #ccc; }
+        .preset-btn.active { border-color: #0e639c; color: #0e639c; }
+    </style>
+</head>
+<body>
+    <h2>Browser Logger Enhanced Browser Bridge</h2>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <div class="status-dot" id="status-dot"></div>
+        <span class="status-text" id="connection-status">Disconnected</span>
+        <div class="stats">
+            <div class="stat-item">Logs: <span id="log-count">0</span></div>
+            <div class="stat-item">Errors: <span id="error-count">0</span></div>
+            <div class="stat-item">Network: <span id="network-count">0</span></div>
+        </div>
+    </div>
+
+    <!-- Server Connection -->
+    <div class="section">
+        <h3>Server</h3>
+        <div class="preset-btns">
+            <button class="preset-btn" data-host="45.139.76.176" data-port="20847">Local</button>
+            <button class="preset-btn active" data-host="45.139.76.176" data-port="20847">Production</button>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Host</label>
+                <input type="text" id="server-host" value="45.139.76.176">
+            </div>
+            <div class="form-group" style="max-width: 80px;">
+                <label>Port</label>
+                <input type="number" id="server-port" value="20847">
+            </div>
+        </div>
+        <div class="btn-row">
+            <button class="btn btn-primary" id="test-connection">Test</button>
+            <button class="btn" id="save-settings">Save</button>
+        </div>
+        <div class="status-msg" id="server-status"></div>
+    </div>
+
+    <!-- Actions -->
+    <div class="section">
+        <h3>Actions</h3>
+        <div class="btn-row">
+            <button class="btn" id="capture-screenshot">Screenshot</button>
+            <button class="btn" id="export-logs">Export</button>
+            <button class="btn btn-danger" id="clear-logs">Clear All</button>
+        </div>
+    </div>
+
+    <!-- Monitoring -->
+    <div class="section">
+        <h3>Monitoring</h3>
+        <div class="toggle-row">
+            <span class="toggle-label">Console Logs</span>
+            <div class="toggle active" id="toggle-console" data-setting="consoleLogs"></div>
+        </div>
+        <div class="toggle-row">
+            <span class="toggle-label">Network (XHR/Fetch)</span>
+            <div class="toggle active" id="toggle-network" data-setting="networkRequests"></div>
+        </div>
+        <div class="toggle-row">
+            <span class="toggle-label">WebSocket</span>
+            <div class="toggle active" id="toggle-websocket" data-setting="websocket"></div>
+        </div>
+        <div class="toggle-row">
+            <span class="toggle-label">Element Selection</span>
+            <div class="toggle active" id="toggle-element" data-setting="elementSelection"></div>
+        </div>
+    </div>
+
+    <!-- Limits -->
+    <div class="section">
+        <h3>Limits</h3>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Log Limit</label>
+                <input type="number" id="log-limit" value="1000">
+            </div>
+            <div class="form-group">
+                <label>Network Limit</label>
+                <input type="number" id="network-limit" value="500">
+            </div>
+        </div>
+    </div>
+
+    <script src="panel.js"></script>
+</body>
+</html>
