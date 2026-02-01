@@ -2,7 +2,7 @@
 # Run: powershell -ExecutionPolicy Bypass -File update-extension.ps1
 
 param(
-    [string]$ExtensionPath = "$env:USERPROFILE\browser-logger-extension",
+    [string]$ExtensionPath = "$env:USERPROFILE\Desktop\browser-logger-extension",
     [switch]$Watch,
     [int]$Interval = 60  # seconds between checks in watch mode
 )
