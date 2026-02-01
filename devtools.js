@@ -89,6 +89,16 @@ chrome.devtools.network.onRequestFinished.addListener((request) => {
   }
 });
 
+// Full network capture via debugger
+let networkRequestsMap = new Map();
+
+function setupFullNetworkCapture() {
+  if (!isDebuggerAttached) return;
+
+  // Already enabled in performAttach(), now we just listen for events
+  console.log('[NETWORK] Full capture ready');
+}
+
 // 2. Debugger attachment for console logs
 function attachDebugger() {
   chrome.debugger.getTargets((targets) => {
@@ -175,7 +185,7 @@ function detachDebugger() {
 // Track WebSocket connections
 const wsConnections = new Map();
 
-// 3. Unified debugger event listener (console + WebSocket)
+// 3. Unified debugger event listener (console + WebSocket + Full Network)
 const debuggerEventListener = (source, method, params) => {
   if (source.tabId !== currentTabId) return;
 
@@ -215,6 +225,77 @@ const debuggerEventListener = (source, method, params) => {
       timestamp: Date.now(),
     };
     sendToServer("/log", entry);
+  }
+
+  // Full Network Capture: Request will be sent
+  if (method === "Network.requestWillBeSent") {
+    networkRequestsMap.set(params.requestId, {
+      requestId: params.requestId,
+      url: params.request.url,
+      method: params.request.method,
+      headers: params.request.headers,
+      postData: params.request.postData,
+      timestamp: params.timestamp,
+      initiator: params.initiator
+    });
+  }
+
+  // Full Network Capture: Response received
+  if (method === "Network.responseReceived") {
+    const req = networkRequestsMap.get(params.requestId);
+    if (req) {
+      req.response = {
+        status: params.response.status,
+        statusText: params.response.statusText,
+        headers: params.response.headers,
+        mimeType: params.response.mimeType
+      };
+    }
+  }
+
+  // Full Network Capture: Loading finished
+  if (method === "Network.loadingFinished") {
+    const req = networkRequestsMap.get(params.requestId);
+    if (req) {
+      // Get response body
+      chrome.debugger.sendCommand(
+        { tabId: currentTabId },
+        "Network.getResponseBody",
+        { requestId: params.requestId },
+        (result) => {
+          if (!chrome.runtime.lastError && result) {
+            req.responseBody = result.body;
+            req.responseBodyBase64 = result.base64Encoded;
+          }
+
+          // Send full network entry to server
+          sendToServer("/network/full", {
+            type: "network-full",
+            ...req,
+            timestamp: Date.now()
+          });
+
+          networkRequestsMap.delete(params.requestId);
+        }
+      );
+    }
+  }
+
+  // Full Network Capture: Loading failed
+  if (method === "Network.loadingFailed") {
+    const req = networkRequestsMap.get(params.requestId);
+    if (req) {
+      req.error = params.errorText;
+      req.canceled = params.canceled;
+
+      sendToServer("/network/full", {
+        type: "network-full-failed",
+        ...req,
+        timestamp: Date.now()
+      });
+
+      networkRequestsMap.delete(params.requestId);
+    }
   }
 
   // WebSocket: Connection created
