@@ -165,8 +165,11 @@ async function captureScreenshot() {
   logActivity('Screenshot', 'Capturing...');
 
   try {
-    // Use chrome.tabs.captureVisibleTab via background script
-    chrome.runtime.sendMessage({ type: 'CAPTURE_SCREENSHOT' }, async (response) => {
+    // Get the tab ID of the inspected page (not DevTools)
+    const tabId = chrome.devtools.inspectedWindow.tabId;
+
+    // Use chrome.tabs.captureVisibleTab via background script with correct tabId
+    chrome.runtime.sendMessage({ type: 'CAPTURE_SCREENSHOT', tabId: tabId }, async (response) => {
       if (chrome.runtime.lastError) {
         setButtonState(btn, 'error', 'Failed!');
         showToast('Screenshot failed: ' + chrome.runtime.lastError.message, 'error');

@@ -35,27 +35,42 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // Screenshot capture
   if (message.type === 'CAPTURE_SCREENSHOT') {
-    chrome.tabs.captureVisibleTab(null, { format: 'png' }, async (dataUrl) => {
+    const tabId = message.tabId;
+
+    // Get the tab's window to capture the correct page
+    chrome.tabs.get(tabId, (tab) => {
       if (chrome.runtime.lastError) {
         sendResponse({ success: false, error: chrome.runtime.lastError.message });
         return;
       }
 
-      try {
-        const response = await fetch(SERVER_URL + '/screenshot', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'screenshot',
-            timestamp: Date.now(),
-            data: dataUrl
-          })
-        });
+      const windowId = tab.windowId;
 
-        sendResponse({ success: response.ok, error: response.ok ? null : 'Server error' });
-      } catch (e) {
-        sendResponse({ success: false, error: e.message });
-      }
+      chrome.tabs.captureVisibleTab(windowId, { format: 'png' }, async (dataUrl) => {
+        if (chrome.runtime.lastError) {
+          sendResponse({ success: false, error: chrome.runtime.lastError.message });
+          return;
+        }
+
+        try {
+          const response = await fetch(SERVER_URL + '/screenshot', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'screenshot',
+              timestamp: Date.now(),
+              tabId: tabId,
+              url: tab.url,
+              title: tab.title,
+              data: dataUrl
+            })
+          });
+
+          sendResponse({ success: response.ok, error: response.ok ? null : 'Server error' });
+        } catch (e) {
+          sendResponse({ success: false, error: e.message });
+        }
+      });
     });
     return true;
   }
