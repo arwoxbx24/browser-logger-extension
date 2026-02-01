@@ -157,6 +157,49 @@ async function executeCommand(cmd) {
     }
   }
 
+  // Execute via debugger (bypasses CSP)
+  if (cmd.action === 'eval_debug') {
+    const tabId = cmd.tabId || (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
+    if (tabId && cmd.code) {
+      try {
+        // Attach debugger if not attached
+        await new Promise((resolve, reject) => {
+          chrome.debugger.attach({ tabId }, '1.3', () => {
+            if (chrome.runtime.lastError) {
+              // Already attached or error - continue anyway
+              resolve();
+            } else {
+              resolve();
+            }
+          });
+        });
+
+        // Execute via Runtime.evaluate (bypasses CSP)
+        chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+          expression: cmd.code,
+          returnByValue: true
+        }, async (result) => {
+          await fetch(SERVER_URL + '/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              success: !result?.exceptionDetails,
+              result: result?.result?.value,
+              error: result?.exceptionDetails?.text,
+              timestamp: Date.now()
+            })
+          });
+        });
+      } catch (error) {
+        await fetch(SERVER_URL + '/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ success: false, error: error.message })
+        });
+      }
+    }
+  }
+
   // Phase 2: Click element by selector
   if (cmd.action === 'click') {
     const tabId = cmd.tabId || (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;

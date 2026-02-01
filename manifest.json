@@ -1,6 +1,6 @@
 {
   "name": "Browser Logger Enhanced",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "description": "Browser Logger Enhanced — console, network, WebSocket monitoring for AI agents",
   "manifest_version": 3,
   "update_url": "https://raw.githubusercontent.com/arwoxbx24/browser-logger-extension/main/update.xml",
