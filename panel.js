@@ -1,98 +1,98 @@
-// Browser Logger Enhanced Browser Bridge - Panel Script v2.1.0
+// Browser Logger DevTools - Panel Script v2.2.0
 
-// Default settings
+const SERVER_HOST = '45.139.76.176';
+const SERVER_PORT = 20847;
+const SERVER_URL = `http://${SERVER_HOST}:${SERVER_PORT}`;
+
 let settings = {
-  serverHost: '45.139.76.176',
-  serverPort: 20847,
-  logLimit: 1000,
-  networkLimit: 500,
+  serverHost: SERVER_HOST,
+  serverPort: SERVER_PORT,
   consoleLogs: true,
   networkRequests: true,
-  websocket: true,
-  elementSelection: true,
-  autoClear: false,
-  logFilter: 'all',
-  urlFilter: ''
+  websocket: true
 };
 
-// Stats
-let stats = {
-  logs: 0,
-  errors: 0,
-  network: 0
-};
+// ========== ACTIVITY LOG ==========
+function logActivity(action, result, isOk = true) {
+  const log = document.getElementById('activity-log');
+  const time = new Date().toLocaleTimeString('ru-RU');
 
-// Load saved settings
-function loadSettings() {
-  chrome.storage.local.get(['arwoxSettings'], (result) => {
-    if (result.arwoxSettings) {
-      settings = { ...settings, ...result.arwoxSettings };
-      applySettingsToUI();
-    }
-  });
-}
+  const item = document.createElement('div');
+  item.className = 'activity-item';
+  item.innerHTML = `
+    <span class="activity-time">${time}</span>
+    <span class="activity-action">${action}</span>
+    <span class="activity-result ${isOk ? 'ok' : 'fail'}">${result}</span>
+  `;
 
-// Apply settings to UI
-function applySettingsToUI() {
-  document.getElementById('server-host').value = settings.serverHost;
-  document.getElementById('server-port').value = settings.serverPort;
-  document.getElementById('log-limit').value = settings.logLimit;
-  document.getElementById('network-limit').value = settings.networkLimit;
-  document.getElementById('log-filter').value = settings.logFilter;
-  document.getElementById('url-filter').value = settings.urlFilter || '';
+  // Add at top
+  if (log.firstChild) {
+    log.insertBefore(item, log.firstChild);
+  } else {
+    log.appendChild(item);
+  }
 
-  // Update toggles
-  updateToggle('toggle-console', settings.consoleLogs);
-  updateToggle('toggle-network', settings.networkRequests);
-  updateToggle('toggle-websocket', settings.websocket);
-  updateToggle('toggle-element', settings.elementSelection);
-  updateToggle('toggle-autoclear', settings.autoClear);
-
-  // Update preset buttons
-  document.querySelectorAll('.preset-btn').forEach(btn => {
-    const isActive = btn.dataset.host === settings.serverHost;
-    btn.classList.toggle('active', isActive);
-  });
-}
-
-function updateToggle(id, value) {
-  const toggle = document.getElementById(id);
-  if (toggle) {
-    toggle.classList.toggle('active', value);
+  // Keep max 20 items
+  while (log.children.length > 20) {
+    log.removeChild(log.lastChild);
   }
 }
 
-// Save settings
-function saveSettings() {
-  settings.serverHost = document.getElementById('server-host').value;
-  settings.serverPort = parseInt(document.getElementById('server-port').value);
-  settings.logLimit = parseInt(document.getElementById('log-limit').value);
-  settings.networkLimit = parseInt(document.getElementById('network-limit').value);
-  settings.logFilter = document.getElementById('log-filter').value;
-  settings.urlFilter = document.getElementById('url-filter').value;
+// ========== TOAST ==========
+function showToast(message, type = 'info') {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = `toast show ${type}`;
 
-  chrome.storage.local.set({ arwoxSettings: settings }, () => {
-    showStatus('server-status', 'Settings saved!', 'success');
-
-    // Notify devtools.js about settings update
-    chrome.runtime.sendMessage({
-      type: 'SETTINGS_UPDATED',
-      settings: settings
-    });
-  });
+  setTimeout(() => {
+    toast.className = 'toast';
+  }, 3000);
 }
 
-// Test connection
+// ========== BUTTON STATE ==========
+function setButtonState(btn, state, text = null) {
+  const originalText = btn.dataset.originalText || btn.textContent;
+  btn.dataset.originalText = originalText;
+
+  btn.classList.remove('loading', 'success', 'error');
+
+  if (state === 'loading') {
+    btn.classList.add('loading');
+    btn.textContent = text || 'Loading...';
+  } else if (state === 'success') {
+    btn.classList.add('success');
+    btn.textContent = text || 'Done!';
+    setTimeout(() => {
+      btn.classList.remove('success');
+      btn.textContent = originalText;
+    }, 2000);
+  } else if (state === 'error') {
+    btn.classList.add('error');
+    btn.textContent = text || 'Error!';
+    setTimeout(() => {
+      btn.classList.remove('error');
+      btn.textContent = originalText;
+    }, 2000);
+  } else {
+    btn.textContent = originalText;
+  }
+}
+
+// ========== TEST CONNECTION ==========
 async function testConnection() {
-  const host = document.getElementById('server-host').value;
-  const port = document.getElementById('server-port').value;
+  const btn = document.getElementById('test-connection');
   const statusDot = document.getElementById('status-dot');
   const statusText = document.getElementById('connection-status');
 
+  setButtonState(btn, 'loading', 'Testing...');
   statusDot.className = 'status-dot connecting';
   statusText.textContent = 'Connecting...';
+  logActivity('Test Connection', 'Starting...');
 
   try {
+    const host = document.getElementById('server-host').value;
+    const port = document.getElementById('server-port').value;
+
     const response = await fetch(`http://${host}:${port}/.identity`, {
       signal: AbortSignal.timeout(5000)
     });
@@ -101,106 +101,104 @@ async function testConnection() {
       const data = await response.json();
       if (data.signature === 'browser-logger-24x7') {
         statusDot.className = 'status-dot connected';
-        statusText.textContent = `Connected to ${host}`;
-        showStatus('server-status', 'Connection successful!', 'success');
+        statusText.textContent = 'Connected';
+        setButtonState(btn, 'success', 'Connected!');
+        showToast('Connected to server!', 'success');
+        logActivity('Test Connection', 'SUCCESS - Server online', true);
         fetchStats();
-      } else {
-        throw new Error('Invalid server signature');
+        return true;
       }
-    } else {
-      throw new Error(`HTTP ${response.status}`);
     }
+    throw new Error('Invalid server');
   } catch (error) {
     statusDot.className = 'status-dot';
     statusText.textContent = 'Disconnected';
-    showStatus('server-status', `Connection failed: ${error.message}`, 'error');
+    setButtonState(btn, 'error', 'Failed!');
+    showToast('Connection failed: ' + error.message, 'error');
+    logActivity('Test Connection', 'FAILED - ' + error.message, false);
+    return false;
   }
 }
 
-// Fetch stats from server
+// ========== FETCH STATS ==========
 async function fetchStats() {
   try {
-    const host = settings.serverHost;
-    const port = settings.serverPort;
+    const [logsRes, networkRes] = await Promise.all([
+      fetch(`${SERVER_URL}/logs`, { signal: AbortSignal.timeout(2000) }),
+      fetch(`${SERVER_URL}/network`, { signal: AbortSignal.timeout(2000) })
+    ]);
 
-    const response = await fetch(`http://${host}:${port}/`, {
-      signal: AbortSignal.timeout(3000)
-    });
-
-    const html = await response.text();
-
-    // Parse stats from HTML
-    const logMatch = html.match(/Console Logs: (\d+)/);
-    const errorMatch = html.match(/Errors: <span[^>]*>(\d+)/);
-    const networkMatch = html.match(/Network Requests: (\d+)/);
-
-    if (logMatch) document.getElementById('log-count').textContent = logMatch[1];
-    if (errorMatch) document.getElementById('error-count').textContent = errorMatch[1];
-    if (networkMatch) document.getElementById('network-count').textContent = networkMatch[1];
-
-  } catch (error) {
-    console.error('Failed to fetch stats:', error);
+    if (logsRes.ok) {
+      const logs = await logsRes.json();
+      document.getElementById('log-count').textContent = logs.length;
+      const errors = logs.filter(l => l.level === 'error').length;
+      document.getElementById('error-count').textContent = errors;
+    }
+    if (networkRes.ok) {
+      const network = await networkRes.json();
+      document.getElementById('network-count').textContent = network.length;
+    }
+  } catch (e) {
+    // Silent fail
   }
 }
 
-// Show status message
-function showStatus(elementId, message, type) {
-  const el = document.getElementById(elementId);
-  el.textContent = message;
-  el.className = `status-msg show ${type}`;
+// ========== SAVE SETTINGS ==========
+function saveSettings() {
+  const btn = document.getElementById('save-settings');
+  setButtonState(btn, 'loading', 'Saving...');
 
-  setTimeout(() => {
-    el.className = 'status-msg';
-  }, 3000);
+  settings.serverHost = document.getElementById('server-host').value;
+  settings.serverPort = parseInt(document.getElementById('server-port').value);
+
+  chrome.storage.local.set({ arwoxSettings: settings }, () => {
+    setButtonState(btn, 'success', 'Saved!');
+    showToast('Settings saved!', 'success');
+    logActivity('Save Settings', 'SUCCESS', true);
+  });
 }
 
-// Capture screenshot
-function captureScreenshot() {
-  chrome.devtools.inspectedWindow.eval(
-    `(function() {
-      return document.documentElement.outerHTML.length;
-    })()`,
-    async (result, isException) => {
-      if (isException) {
-        showStatus('server-status', 'Screenshot failed', 'error');
+// ========== CAPTURE SCREENSHOT ==========
+async function captureScreenshot() {
+  const btn = document.getElementById('capture-screenshot');
+  setButtonState(btn, 'loading', 'Capturing...');
+  logActivity('Screenshot', 'Capturing...');
+
+  try {
+    // Use chrome.tabs.captureVisibleTab via background script
+    chrome.runtime.sendMessage({ type: 'CAPTURE_SCREENSHOT' }, async (response) => {
+      if (chrome.runtime.lastError) {
+        setButtonState(btn, 'error', 'Failed!');
+        showToast('Screenshot failed: ' + chrome.runtime.lastError.message, 'error');
+        logActivity('Screenshot', 'FAILED - ' + chrome.runtime.lastError.message, false);
         return;
       }
 
-      // Use chrome.tabs to capture
-      chrome.tabs.captureVisibleTab(null, { format: 'png' }, async (dataUrl) => {
-        if (chrome.runtime.lastError) {
-          showStatus('server-status', 'Screenshot failed: ' + chrome.runtime.lastError.message, 'error');
-          return;
-        }
-
-        try {
-          const response = await fetch(`http://${settings.serverHost}:${settings.serverPort}/screenshot`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              type: 'screenshot',
-              timestamp: Date.now(),
-              data: dataUrl
-            })
-          });
-
-          if (response.ok) {
-            showStatus('server-status', 'Screenshot captured!', 'success');
-          } else {
-            throw new Error('Server error');
-          }
-        } catch (error) {
-          showStatus('server-status', 'Failed to send screenshot', 'error');
-        }
-      });
-    }
-  );
+      if (response && response.success) {
+        setButtonState(btn, 'success', 'Sent!');
+        showToast('Screenshot captured and sent!', 'success');
+        logActivity('Screenshot', 'SUCCESS - Sent to server', true);
+      } else {
+        setButtonState(btn, 'error', 'Failed!');
+        showToast('Screenshot failed: ' + (response?.error || 'Unknown'), 'error');
+        logActivity('Screenshot', 'FAILED - ' + (response?.error || 'Unknown'), false);
+      }
+    });
+  } catch (error) {
+    setButtonState(btn, 'error', 'Failed!');
+    showToast('Screenshot failed: ' + error.message, 'error');
+    logActivity('Screenshot', 'FAILED - ' + error.message, false);
+  }
 }
 
-// Export logs
+// ========== EXPORT LOGS ==========
 async function exportLogs() {
+  const btn = document.getElementById('export-logs');
+  setButtonState(btn, 'loading', 'Exporting...');
+  logActivity('Export Logs', 'Starting...');
+
   try {
-    const response = await fetch(`http://${settings.serverHost}:${settings.serverPort}/logs`);
+    const response = await fetch(`${SERVER_URL}/logs`);
     const logs = await response.json();
 
     const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
@@ -208,39 +206,54 @@ async function exportLogs() {
 
     const a = document.createElement('a');
     a.href = url;
-    a.download = `arwox-logs-${Date.now()}.json`;
+    a.download = `browser-logs-${Date.now()}.json`;
     a.click();
 
     URL.revokeObjectURL(url);
-    showStatus('server-status', 'Logs exported!', 'success');
+    setButtonState(btn, 'success', 'Downloaded!');
+    showToast(`Exported ${logs.length} logs!`, 'success');
+    logActivity('Export Logs', `SUCCESS - ${logs.length} logs`, true);
   } catch (error) {
-    showStatus('server-status', 'Export failed: ' + error.message, 'error');
+    setButtonState(btn, 'error', 'Failed!');
+    showToast('Export failed: ' + error.message, 'error');
+    logActivity('Export Logs', 'FAILED - ' + error.message, false);
   }
 }
 
-// Clear all logs
+// ========== CLEAR LOGS ==========
 async function clearLogs() {
+  const btn = document.getElementById('clear-logs');
+  setButtonState(btn, 'loading', 'Clearing...');
+  logActivity('Clear Logs', 'Clearing...');
+
   try {
-    await fetch(`http://${settings.serverHost}:${settings.serverPort}/clear`, {
-      method: 'DELETE'
-    });
+    await fetch(`${SERVER_URL}/clear`, { method: 'DELETE' });
 
     document.getElementById('log-count').textContent = '0';
     document.getElementById('error-count').textContent = '0';
     document.getElementById('network-count').textContent = '0';
 
-    showStatus('server-status', 'All logs cleared!', 'success');
+    setButtonState(btn, 'success', 'Cleared!');
+    showToast('All logs cleared!', 'success');
+    logActivity('Clear Logs', 'SUCCESS', true);
   } catch (error) {
-    showStatus('server-status', 'Clear failed: ' + error.message, 'error');
+    setButtonState(btn, 'error', 'Failed!');
+    showToast('Clear failed: ' + error.message, 'error');
+    logActivity('Clear Logs', 'FAILED - ' + error.message, false);
   }
 }
 
-// Initialize
+// ========== INITIALIZE ==========
 document.addEventListener('DOMContentLoaded', () => {
-  loadSettings();
+  // Set initial values
+  document.getElementById('server-host').value = SERVER_HOST;
+  document.getElementById('server-port').value = SERVER_PORT;
 
   // Test connection on load
-  setTimeout(testConnection, 500);
+  setTimeout(() => {
+    testConnection();
+    logActivity('Panel Loaded', 'DevTools panel ready', true);
+  }, 500);
 
   // Update stats every 3 seconds
   setInterval(fetchStats, 3000);
@@ -248,21 +261,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Event listeners
   document.getElementById('test-connection').addEventListener('click', testConnection);
   document.getElementById('save-settings').addEventListener('click', saveSettings);
-  document.getElementById('reconnect-btn').addEventListener('click', testConnection);
   document.getElementById('capture-screenshot').addEventListener('click', captureScreenshot);
   document.getElementById('export-logs').addEventListener('click', exportLogs);
   document.getElementById('clear-logs').addEventListener('click', clearLogs);
-
-  // Preset buttons
-  document.querySelectorAll('.preset-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.getElementById('server-host').value = btn.dataset.host;
-      document.getElementById('server-port').value = btn.dataset.port;
-
-      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-    });
-  });
 
   // Toggle switches
   document.querySelectorAll('.toggle').forEach(toggle => {
@@ -272,15 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
       settings[setting] = toggle.classList.contains('active');
 
       chrome.storage.local.set({ arwoxSettings: settings });
-      chrome.runtime.sendMessage({
-        type: 'SETTINGS_UPDATED',
-        settings: settings
-      });
+      logActivity('Toggle ' + setting, toggle.classList.contains('active') ? 'ON' : 'OFF', true);
     });
-  });
-
-  // Auto-save on input change
-  ['log-limit', 'network-limit', 'log-filter', 'url-filter'].forEach(id => {
-    document.getElementById(id).addEventListener('change', saveSettings);
   });
 });
