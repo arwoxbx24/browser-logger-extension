@@ -15,4 +15,3 @@ projects/
 access.log*
 redis-export-*.json
 gitleaks-redacted.json
-secret-scan.yml
