@@ -1,0 +1,17 @@
+# AgentHub AH-501 secret hygiene
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.p12
+*.pfx
+.credentials.json
+.archive/
+.claude-downloads/
+file-history/
+projects/
+*.log
+access.log*
+redis-export-*.json
+gitleaks-redacted.json

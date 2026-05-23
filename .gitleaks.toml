@@ -1,0 +1,13 @@
+title = "AgentHub repository gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Approved placeholders only; do not allowlist real secrets."
+regexes = [
+  '''CHANGEME''',
+  '''REDACTED''',
+  '''example(_|-)?secret''',
+  '''placeholder(_|-)?token'''
+]
